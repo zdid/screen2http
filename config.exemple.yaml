@@ -1,0 +1,18 @@
+# Copier ce fichier en config.yaml puis l'adapter.
+ssh:
+  host: "192.168.1.100"
+  port: 22
+  username: "pi"
+  privateKey: "/home/pi/.ssh/id_ed25519"
+
+  # Maintien de la connexion SSH
+  keepaliveInterval: 10000
+  readyTimeout: 20000
+
+screen:
+  name: "monapp"
+
+web:
+  host: "127.0.0.1"
+  port: 3000
+  title: "Console distante"

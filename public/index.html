@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+
+<html lang="fr">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1">
+
+<title>Console distante</title>
+
+<link rel="stylesheet"
+      href="/xterm.css">
+
+<style>
+
+html,
+body {
+
+    margin: 0;
+
+    width: 100%;
+    height: 100%;
+
+    overflow: hidden;
+
+    background: #111;
+
+    font-family: Arial, sans-serif;
+}
+
+body {
+
+    display: flex;
+
+    flex-direction: column;
+}
+
+header {
+
+    height: 42px;
+
+    display: flex;
+
+    align-items: center;
+
+    padding: 0 12px;
+
+    gap: 15px;
+
+    background: #222;
+
+    color: white;
+}
+
+#status {
+
+    color: #aaa;
+
+    font-size: 14px;
+}
+
+#terminal {
+
+    flex: 1;
+
+    min-height: 0;
+
+    padding: 5px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>
+
+<strong>
+Console distante
+</strong>
+
+<span id="status">
+Démarrage...
+</span>
+
+</header>
+
+<div id="terminal"></div>
+
+<script src="/xterm.js"></script>
+
+<script src="/addon-fit.js"></script>
+
+<script>
+
+const terminalElement =
+    document.getElementById("terminal");
+
+const statusElement =
+    document.getElementById("status");
+
+
+// --------------------------------------------------
+// Terminal
+// --------------------------------------------------
+
+const terminal = new Terminal({
+
+    cursorBlink: true,
+
+    scrollback: 5000,
+
+    fontSize: 14,
+
+    fontFamily:
+        "Consolas, 'Courier New', monospace"
+});
+
+
+// --------------------------------------------------
+// Adaptation automatique à la fenêtre
+// --------------------------------------------------
+
+const fit =
+    new FitAddon.FitAddon();
+
+terminal.loadAddon(fit);
+
+terminal.open(terminalElement);
+
+fit.fit();
+
+
+// --------------------------------------------------
+// WebSocket
+// --------------------------------------------------
+
+let socket;
+
+
+function connect() {
+
+    const protocol =
+        location.protocol === "https:"
+            ? "wss:"
+            : "ws:";
+
+    socket =
+        new WebSocket(
+            protocol +
+            "//" +
+            location.host
+        );
+
+
+    socket.onopen = () => {
+
+        statusElement.textContent =
+            "Connecté";
+
+        fit.fit();
+
+        sendResize();
+
+        terminal.focus();
+    };
+
+
+    socket.onmessage = event => {
+
+        const message =
+            JSON.parse(event.data);
+
+
+        if (message.type === "output") {
+
+            terminal.write(
+                message.data
+            );
+        }
+
+
+        if (message.type === "status") {
+
+            statusElement.textContent =
+                message.data;
+        }
+
+
+        if (message.type === "error") {
+
+            statusElement.textContent =
+                message.data;
+
+            terminal.write(
+                "\r\n" +
+                "\x1b[31m" +
+                message.data +
+                "\x1b[0m\r\n"
+            );
+        }
+    };
+
+
+    socket.onclose = () => {
+
+        statusElement.textContent =
+            "Déconnecté — reconnexion...";
+
+        setTimeout(
+            connect,
+            3000
+        );
+    };
+
+
+    socket.onerror = () => {
+
+        statusElement.textContent =
+            "Erreur WebSocket";
+    };
+}
+
+
+// --------------------------------------------------
+// Clavier
+// --------------------------------------------------
+
+terminal.onData(data => {
+
+    if (
+        socket &&
+        socket.readyState === WebSocket.OPEN
+    ) {
+
+        socket.send(
+            JSON.stringify({
+
+                type: "input",
+
+                data: data
+            })
+        );
+    }
+});
+
+
+// --------------------------------------------------
+// Taille du terminal
+// --------------------------------------------------
+
+function sendResize() {
+
+    if (
+        !socket ||
+        socket.readyState !== WebSocket.OPEN
+    )
+        return;
+
+
+    socket.send(
+        JSON.stringify({
+
+            type: "resize",
+
+            cols: terminal.cols,
+
+            rows: terminal.rows
+        })
+    );
+}
+
+
+window.addEventListener(
+    "resize",
+    () => {
+
+        fit.fit();
+
+        sendResize();
+    }
+);
+
+
+// --------------------------------------------------
+// Connexion
+// --------------------------------------------------
+
+connect();
+
+</script>
+
+</body>
+
+</html>
